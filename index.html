@@ -676,6 +676,7 @@
     <div id="flash-layer"></div>
     <div id="curse-overlay"></div>
     <div id="edge-text">聞こえる…聞こえる…</div>
+    <audio id="bgm-player" loop preload="auto" src="Gymnopédie No.1.mp3"></audio>
 
     <!-- 警告屏 -->
     <section id="warning-screen" class="screen active">
@@ -748,6 +749,7 @@
         <h2>设置</h2>
         <label><input type="checkbox" id="cb-mute"> 静音</label>
         <label>主音量：<input type="range" id="range-volume" min="0" max="1" step="0.05" value="0.6"></label>
+        <label>背景音乐：<input type="range" id="range-bgm" min="0" max="0.8" step="0.05" value="0.35"></label>
         <label>文字速度：<input type="range" id="range-speed" min="0.3" max="3" step="0.1" value="1"></label>
         <button id="btn-close-settings" class="btn">关闭</button>
       </div>
@@ -5847,6 +5849,10 @@
       droneOsc: [],
       droneGain: null,
       heartbeatTimer: null,
+      bgmEl: null,
+      bgmGain: null,
+      bgmTargetVol: 0.35,
+      bgmFadeTimer: null,
 
       init() {
         if (this.ctx) return;
@@ -5856,11 +5862,70 @@
         this.master = this.ctx.createGain();
         this.master.gain.value = settings.mute ? 0 : Math.max(0, Math.min(1, settings.volume));
         this.master.connect(this.ctx.destination);
+        // BGM 元素引用
+        this.bgmEl = document.getElementById('bgm-player');
+        if (this.bgmEl) {
+          this.bgmEl.volume = 0;
+        }
+      },
+
+      startBgm() {
+        if (!this.bgmEl) return;
+        try {
+          this.bgmEl.currentTime = 0;
+          const p = this.bgmEl.play();
+          if (p && p.catch) p.catch(() => {});
+          this.fadeBgmTo(this.bgmTargetVol, 3000);
+        } catch (e) {}
+      },
+
+      stopBgm() {
+        if (!this.bgmEl) return;
+        this.fadeBgmTo(0, 2000);
+        setTimeout(() => { try { this.bgmEl.pause(); } catch (e) {} }, 2200);
+      },
+
+      pauseBgm() {
+        if (!this.bgmEl) return;
+        this.fadeBgmTo(0, 1000);
+        setTimeout(() => { try { this.bgmEl.pause(); } catch (e) {} }, 1100);
+      },
+
+      resumeBgm() {
+        if (!this.bgmEl) return;
+        try { this.bgmEl.play().catch(() => {}); } catch (e) {}
+        this.fadeBgmTo(this.bgmTargetVol, 2000);
+      },
+
+      fadeBgmTo(target, duration) {
+        if (!this.bgmEl) return;
+        if (this.bgmFadeTimer) clearInterval(this.bgmFadeTimer);
+        const start = this.bgmEl.volume;
+        const steps = Math.max(10, Math.floor(duration / 50));
+        const delta = (target - start) / steps;
+        let i = 0;
+        this.bgmFadeTimer = setInterval(() => {
+          i++;
+          const v = start + delta * i;
+          this.bgmEl.volume = Math.max(0, Math.min(1, v));
+          if (i >= steps) {
+            this.bgmEl.volume = target;
+            clearInterval(this.bgmFadeTimer);
+            this.bgmFadeTimer = null;
+          }
+        }, 50);
+      },
+
+      setBgmVolume(v) {
+        this.bgmTargetVol = v;
+        if (this.bgmEl && !settings.mute) this.fadeBgmTo(v, 300);
       },
 
       setMuted(m) {
         settings.mute = m;
         if (this.master) this.master.gain.value = m ? 0 : settings.volume;
+        if (m) { if (this.bgmEl) this.bgmEl.volume = 0; }
+        else { if (this.bgmEl) this.bgmEl.volume = this.bgmTargetVol; }
         saveSettings();
       },
 
@@ -6052,9 +6117,9 @@
     function loadSettings() {
       try {
         const raw = localStorage.getItem(SETTINGS_KEY);
-        if (raw) return Object.assign({ mute: false, volume: 0.6, speed: 1 }, JSON.parse(raw));
+        if (raw) return Object.assign({ mute: false, volume: 0.6, speed: 1, bgmVolume: 0.35 }, JSON.parse(raw));
       } catch (e) {}
-      return { mute: false, volume: 0.6, speed: 1 };
+      return { mute: false, volume: 0.6, speed: 1, bgmVolume: 0.35 };
     }
     function saveSettings() {
       try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch (e) {}
@@ -6099,6 +6164,7 @@
       } catch (e) {}
       settings = loadSettings();
       if (audio.master) audio.master.gain.value = settings.mute ? 0 : settings.volume;
+      audio.setBgmVolume(settings.bgmVolume);
       state = defaultState();
       updateMenuButtons();
     }
@@ -6378,6 +6444,7 @@
         stopFlashes();
         stopSnow();
         audio.stopDrone();
+        audio.resumeBgm();
         showScreen('main-menu');
         updateMenuButtons();
         return;
@@ -6464,6 +6531,7 @@
       stopSnow();
       audio.stopHeartbeat();
       audio.stopDrone();
+      audio.stopBgm();
       showScreen('ending-screen');
     }
 
@@ -6551,6 +6619,7 @@
     function openSettings() {
       $('cb-mute').checked = settings.mute;
       $('range-volume').value = settings.volume;
+      $('range-bgm').value = settings.bgmVolume;
       $('range-speed').value = settings.speed;
       $('settings-panel').classList.remove('hidden');
     }
@@ -6673,11 +6742,13 @@
         audio.init();
         audio.startDrone();
         audio.playNurseryFragment();
+        audio.startBgm();
         showScreen('main-menu');
         updateMenuButtons();
       };
       $('btn-exit').onclick = () => {
         audio.stopDrone();
+        audio.stopBgm();
         document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;background:#050505;color:#555;font-family:serif;">已退出。请手动关闭窗口。</div>';
         try { window.close(); } catch (e) {}
       };
@@ -6700,6 +6771,7 @@
       // 设置
       $('cb-mute').onchange = (e) => audio.setMuted(e.target.checked);
       $('range-volume').oninput = (e) => audio.setVolume(parseFloat(e.target.value));
+      $('range-bgm').oninput = (e) => { settings.bgmVolume = parseFloat(e.target.value); audio.setBgmVolume(settings.bgmVolume); saveSettings(); };
       $('range-speed').oninput = (e) => { settings.speed = parseFloat(e.target.value); saveSettings(); };
       $('btn-close-settings').onclick = closeSettings;
 
@@ -6731,6 +6803,7 @@
       $('btn-ending-back').onclick = () => {
         showScreen('main-menu');
         updateMenuButtons();
+        audio.resumeBgm();
       };
     }
 
@@ -6739,6 +6812,8 @@
       runWarning();
       // 如曾经静音则应用
       if (settings.mute) audio.setMuted(true);
+      // 应用 BGM 音量设置
+      audio.bgmTargetVol = settings.bgmVolume || 0.35;
       // 边缘日文文字轮换
       startEdgeTextCycle();
     }
