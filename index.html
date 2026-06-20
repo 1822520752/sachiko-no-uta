@@ -357,12 +357,12 @@
       font-size: 0.85rem;
       color: var(--dim);
       z-index: 30;
+      gap: 1rem;
     }
-    #hud-left span, #hud-right span { margin-right: 1rem; }
+    #hud-left, #hud-right { display: flex; align-items: center; gap: 0.8rem; flex-shrink: 0; }
+    #hud-center { display: flex; align-items: center; gap: 1.2rem; flex-shrink: 1; }
+    #hud-right span { white-space: nowrap; }
     .hud-btn {
-      position: absolute;
-      top: 0.6rem;
-      z-index: 31;
       background: transparent;
       border: 1px solid var(--border);
       color: var(--dim);
@@ -370,10 +370,9 @@
       padding: 0.3rem 0.7rem;
       cursor: pointer;
       font-size: 0.8rem;
+      white-space: nowrap;
     }
     .hud-btn:hover { color: var(--fg); border-color: var(--fg); }
-    #btn-clues { right: 5.5rem; }
-    #btn-game-settings { right: 1rem; }
 
     #text-area {
       flex: 1;
@@ -731,13 +730,15 @@
           <span id="hud-char"></span>
           <span id="hud-chapter"></span>
         </div>
-        <div id="hud-right">
+        <div id="hud-center">
           <span id="hud-sanity">理智: <b id="sanity-val">100</b></span>
           <span id="hud-curse">诅咒: <b id="curse-val">0</b></span>
         </div>
+        <div id="hud-right">
+          <button id="btn-clues" class="hud-btn hidden">线索</button>
+          <button id="btn-game-settings" class="hud-btn">设置</button>
+        </div>
       </div>
-      <button id="btn-clues" class="hud-btn hidden">线索</button>
-      <button id="btn-game-settings" class="hud-btn">设置</button>
       <div id="text-area"><div id="text-stack"></div></div>
       <div id="options-area"></div>
       <div id="skip-hint" class="hidden">点击屏幕或按空格跳过当前段落</div>
